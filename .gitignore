@@ -1,0 +1,6 @@
+.env
+*.log
+*_.log
+*.log
+serverss_.log
+error
