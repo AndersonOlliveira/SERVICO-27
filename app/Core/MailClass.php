@@ -3,6 +3,7 @@
 namespace App\Core;
 
 use App\Core\AppManipularError;
+use App\Core\Functions;
 
 
 
@@ -15,10 +16,12 @@ use PHPMailer\PHPMailer\Exception;
 class MailClass
 {
     protected $manipulador;
+    protected $function;
 
     public function __construct()
     {
         $this->manipulador = new AppManipularError(__DIR__ . '/../error/error');
+        $this->function = new Functions();
         // throw new \Exception('Not implemented');
     }
 
@@ -39,13 +42,16 @@ class MailClass
             //Recipients
             $mail->setFrom($_ENV['SMTP_USER'], 'Mailer');
             $mail->addAddress($destinatario);
+            //$mail->addCC($_ENV['SMTP_CC']); // add cc recpient
 
             //Content
+            $corpo = mb_convert_encoding($corpo, 'UTF-8', 'auto');
+            $assunto = mb_convert_encoding($assunto, 'UTF-8', 'auto');
             $mail->isHTML(true);                                  //Set email format to HTML
             $mail->Subject = $assunto;
             $mail->Body    = $corpo;
-            $mail->AltBody = $altBody ?? strip_tags($corpo);
-
+            $mail->AltBody = $altBody ? $altBody : strip_tags($corpo);
+            $mail->CharSet = 'UTF-8';
             $mail->send();
             return true;
         } catch (Exception $e) {

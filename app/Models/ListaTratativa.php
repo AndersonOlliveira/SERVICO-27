@@ -55,7 +55,7 @@ class ListaTratativa extends Model
                 LEFT JOIN ven ON vencli.vencliven = ven.venid 
                 LEFT JOIN perfilcob ON perfilcobid = cliperfilcobid
                 where 
-                crcfil =  1 and
+                crcfil = 1 and
                 upper(crcbxd) = 'N' AND
                 crcvlr > '0.00' AND
                 crcprepago = false ";
@@ -65,25 +65,9 @@ class ListaTratativa extends Model
         $filtros = [];
         $params = [];
 
-        if (!empty($data_inicio) && !empty($data_fim)) {
 
-            $filtros[] = " crc.crcdatvct::date BETWEEN :data_inicio AND :data_fim";
-            $data_inicio_obj = $this->funciton->converterData($data_inicio);
-            $data_fim_obj =  $this->funciton->converterData($data_fim);
-
-            if ($data_inicio_obj && $data_fim_obj) {
-                $data_inicio = $data_inicio_obj->format('Y-m-d');
-                $data_fim = $data_fim_obj->format('Y-m-d');
-
-                $params[':data_inicio'] = $data_inicio;
-                $params[':data_fim'] = $data_fim;
-            } else {
-
-                return ['msg' => 'DATAS ENVIADAS NO FORMATO INVALIDO.'];
-            }
-        }
         // Cenário B: Filtro por Mês/Ano (Caso não tenha o período completo)
-        elseif (!empty($mes)) {
+        if (!empty($mes)) {
             $dados_mes = explode('/', $mes);
             if (count($dados_mes) == 2) {
 
@@ -96,11 +80,6 @@ class ListaTratativa extends Model
         // Se houver filtros, aplica-os à consulta
         if (!empty($filtros)) {
             $sql .= " AND " . implode(" AND ", $filtros);
-        }
-
-        if ($idCobranca) {
-            $sql .= " AND crcid = :crcid";
-            $params[':crcid'] = $idCobranca;
         }
 
         $sql .= "  group by crcid ,clicobtel,clicomctt,clissp,clinomraz,cliid,venean,perfilcobtipo,crcprepago
@@ -252,7 +231,7 @@ class ListaTratativa extends Model
 
 
         $sql = "";
-        $sql = "SELECT ctrapl FROM ctr where ctrid = :ctrid";
+        $sql = "SELECT ctrapl, ctremail FROM ctr where ctrid = :ctrid";
 
 
         try {
@@ -261,9 +240,231 @@ class ListaTratativa extends Model
             $stmt->execute();
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            return trim($result['ctrapl']);
+            return [
+                'nome' => trim($result['ctrapl']),
+                'email' => trim($result['ctremail'])
+            ];
         } catch (PDOException $e) {
             $this->manipulador->manipuladorDeErros(8, 'Erro na busca do ctr: ' . $e->getMessage(), __FILE__, __LINE__);
+        }
+    }
+
+    public function insert_notification($corpo, $tipo_acoes, $ctr_interno, $idCobranca, $p_contato)
+    {
+
+
+        $sql = "INSERT INTO public.crc_tratativas_movimentacao(
+                    crc_tratativas_crcid, crc_tratativa_tipo_id, crc_tipo_acoes_id, descricao_movimentacao, ctr_interno)
+                    VALUES (:cobranca, :crc_tratativa_tipo_id, :crc_tipo_acoes_id, :descricao_movimentacao, :ctr_interno)
+                    RETURNING id_crc_tratativas;";
+
+        $sqlStatus = "INSERT INTO public.crc_tratativas_status (crc_tratativas_id, cod_status, status_descricao, p_proximo_contato) 
+                      VALUES (:crc_tratativas_id, :cod_status, :status_descricao, :p_proximo_contato);";
+
+        try {
+
+            $crc_tratativa_tipo_id = $tipo_acoes;
+            $crc_tipo_acoes_id = $tipo_acoes;
+            $descricao_movimentacao =  $this->funciton->convertToLatin1('ENVIADO NOTIFICAÇÃO VIA EMAIL');
+
+
+            $cliIds = self::getRelatorioCobranca($idCobranca);
+            $tpos =  self::tipo_tratativa(); //PEGO O TIOPO DA TRA
+
+
+            $new_tipo = self::listTipoContrato($crc_tratativa_tipo_id);
+            $new_acoes = self::listTipoAcoes($crc_tipo_acoes_id);
+            $res = self::info_responsavel($ctr_interno);
+
+
+            $ocorrencia = "INSERIDO SISTEMA - RESPONSAVEL: " . $res['nome'] . " - EMAIL: " . $res['email'] . " - COBRANÇA: " . $cliIds[0]['n_nro'] . " - TIPO: " . $this->funciton->convertEncode($new_tipo[0]['tipo_tratativa']) . " - AÇÃO: " . $this->funciton->convertEncode($new_acoes[0]['acao_descricao']) . " - DESCRIÇÃO: " . $descricao_movimentacao;
+            $nome = "INSERIDO SISTEMA - ENVIO DE E-MAIL:";
+            print_R($this->funciton->convertToLatin1($ocorrencia));
+            print_R($this->funciton->convertToLatin1($descricao_movimentacao));
+            $ocorrencia = $this->funciton->convertToLatin1($ocorrencia);
+
+
+            // die();
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->bindParam(':cobranca', $idCobranca);
+            $stmt->bindParam(':crc_tratativa_tipo_id', $crc_tratativa_tipo_id);
+            $stmt->bindParam(':crc_tipo_acoes_id', $crc_tipo_acoes_id);
+            $stmt->bindParam(':descricao_movimentacao', $descricao_movimentacao);
+            $stmt->bindParam(':ctr_interno', $ctr_interno);
+
+            $stmt->execute();
+
+            // Recupera o ID gerado usando o FETCH do RETURNING (Postgres)
+            $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+            $idTratativa = $resultado['id_crc_tratativas'];
+            $cod_status = $tipo_acoes;  //# dados;
+            $stmt = $this->db->prepare($sqlStatus);
+            $stmt->bindParam(':crc_tratativas_id', $idTratativa);
+            $stmt->bindParam(':cod_status', $cod_status);
+            $stmt->bindParam(':status_descricao', $nome);
+            $stmt->bindParam(':p_proximo_contato', $p_contato); //CRIO UMA NOVA LINHA INFORMADO QUE TEVE O INFO DE ENTRAR EM CONTATO COM A PESSOA
+
+            if ($stmt->execute()) {
+
+
+                self::registrarOcorrencia($cliIds[0]['cliid'], $tpos[0]['tpoid'], $ocorrencia, $nome);
+
+                return ['status' => 'success', 'message' => 'Movimentação e Status inseridos com sucesso!'];
+            }
+        } catch (PDOException $e) {
+            $this->manipulador->manipuladorDeErros(10, 'Erro ao inserir notificação: ' . $e->getMessage(), __FILE__, __LINE__);
+        }
+    }
+
+    public function listTipoContrato($cod = null)
+    {
+
+        $parametro = [];
+
+        if ($cod !== null) {
+            $sql = "SELECT * FROM public.crc_tratativa_tipo WHERE cod_tipo_tratativa = :cod_tipo_tratativa";
+            $parametro[':cod_tipo_tratativa'] = $cod;
+        } else {
+            $sql = "SELECT * FROM public.crc_tratativa_tipo WHERE cod_tipo_tratativa NOT IN (6,7)";
+        }
+
+        $sql .= " ORDER BY tipo_tratativa ASC;";
+
+        try {
+            $stmt = $this->db->prepare($sql);
+
+            foreach ($parametro as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+
+            $stmt->execute();
+
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->manipulador->manipuladorDeErros(10, 'Erro na busca public.crc_tratativa_tipo: ' . $e->getMessage(), __FILE__, __LINE__);
+
+            echo "ERRO: " . $e->getMessage();
+        }
+    }
+    public function listTipoAcoes($cod = null)
+    {
+        $parametro = [];
+
+        if ($cod !== null) {
+            // quando foi enviado um código, não aplica o filtro not in
+            $sql = "SELECT * FROM public.crc_tipo_acoes WHERE cod_acao = :cod";
+            $parametro[':cod'] = $cod;
+        } else {
+            $sql = "SELECT * FROM public.crc_tipo_acoes WHERE cod_acao NOT IN (6,7)";
+        }
+
+        $sql .= " order by acao_descricao asc;";
+
+        try {
+            $stmt = $this->db->prepare($sql);
+
+
+            foreach ($parametro as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+
+            $stmt->execute();
+
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->manipulador->manipuladorDeErros(10, 'Erro na busca das açoes public.crc_tipo_acoes : ' . $e->getMessage(), __FILE__, __LINE__);
+
+            echo "ERRO: " . $e->getMessage();
+        }
+    }
+    public function getRelatorioCobranca($idCobranca)
+    {
+
+
+        $sql = "SELECT  
+                crcid as N_Nro,
+                crcdatvct as Vencimento,
+                crcdocger as Doc_Ger,crcvlr as valor,
+                clicobtel as telefone,
+                clicomctt as Contato_financeiro,
+                upper(clissp) as Suspenso,
+                clinomraz as cliente,
+                cliid,
+                array_to_string(array_agg(cast(venean as text)),', ') as vendedor,
+                perfilcobtipo, 
+                crcprepago FROM 
+                cli INNER JOIN crc ON crccli = cliid 
+                LEFT JOIN vencli ON vencli.venclicli = cli.cliid
+                LEFT JOIN ven ON vencli.vencliven = ven.venid 
+                LEFT JOIN perfilcob ON perfilcobid = cliperfilcobid
+                where 
+                crcfil =  1 and
+                upper(crcbxd) = 'N' AND
+                crcvlr > '0.00' AND
+                crcprepago = false ";
+
+
+        $params = [];
+        if ($idCobranca) {
+            $sql .= " AND crcid = :crcid";
+            $params[':crcid'] = $idCobranca;
+        }
+
+        $sql .= "  group by crcid ,clicobtel,clicomctt,clissp,clinomraz,cliid,venean,perfilcobtipo,crcprepago
+                    ORDER BY vencimento asc;";
+
+        try {
+            $sql = $this->db->prepare($sql);
+
+            foreach ($params as $key => $value) {
+                $sql->bindValue($key, $value);
+            }
+            $sql->execute();
+
+            $result = [];
+            while ($row = $sql->fetch(PDO::FETCH_ASSOC)) {
+                $result[] = $row;
+            }
+
+            return $result;
+        } catch (PDOException $e) {
+            $this->manipulador->manipuladorDeErros(10, 'Erro na busca do getRelatorio_origim: ' . $e->getMessage(), __FILE__, __LINE__);
+            echo "ERRO: " . $e->getMessage();
+        }
+    }
+
+    public function tipo_tratativa()
+    {
+
+        $sql = "SELECT tpoid FROM public.tpo WHERE tpodsc = trim('TRATATIVA COBRANCA');";
+
+        try {
+            $stmt = $this->db->prepare($sql);
+
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->manipulador->manipuladorDeErros(10, 'Erro ao listar tipo de contrato: ' . $e->getMessage(), __FILE__, __LINE__);
+        }
+    }
+    public function registrarOcorrencia($cliId, $tpos, $descricao, $nome)
+    {
+        $sql = "INSERT INTO public.cliocr(
+                     cliocrcli, cliocrtpo, cliocrant, cliocrrsp)
+                    VALUES (:cliocrcli, :cliocrtpo, :cliocrant, :cliocrrsp);";
+
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->bindParam(':cliocrcli', $cliId);
+            $stmt->bindParam(':cliocrtpo', $tpos);
+            $stmt->bindParam(':cliocrant', $descricao);
+            $stmt->bindParam(':cliocrrsp', $nome);
+
+            $stmt->execute();
+        } catch (PDOException $e) {
+            $this->manipulador->manipuladorDeErros(11, 'Erro ao registrar ocorrência public.cliocr: ' . $e->getMessage(), __FILE__, __LINE__);
+            error_log('Erro ao registrar ocorrência: ' . $e->getMessage());
         }
     }
 }

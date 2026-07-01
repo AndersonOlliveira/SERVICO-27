@@ -32,7 +32,7 @@ class Functions
             }
         } elseif (is_string($data)) {
 
-            return trim(mb_convert_encoding($data, 'UTF-8', 'ISO-8859-1'));
+            return trim(mb_convert_encoding($data, "UTF-8", 'ISO-8859-1'));
         }
         return $data;
     }

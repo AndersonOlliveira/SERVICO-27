@@ -12,6 +12,6 @@ $dotenv->load();
 
 // Instancia o controlador e inicia o loop do terminal
 $controller = new TarefaController();
-// $controller->processar_dados();
+$controller->processar_dados();
 
-$controller->processar_dados_email();
+// $controller->processar_dados_email();

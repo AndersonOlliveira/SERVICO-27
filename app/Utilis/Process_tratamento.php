@@ -12,7 +12,6 @@ class Process_tratamento
 
     public function verifry_cobraca($dados)
     {
-
         echo "<pre>";
 
         print_r('FOI CHAMANDO');
