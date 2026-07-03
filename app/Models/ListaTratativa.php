@@ -34,10 +34,11 @@ class ListaTratativa extends Model
         return $stmt->fetchAll();
     }
 
-    public function getRelatorio_origim_list($idCobranca = null, $mes = null, $data_inicio = null, $data_fim = null)
+    public function getRelatorio_origim_list($mes)
     {
 
 
+        $sql = "";
         $sql = "SELECT  
                 crcid as n_nro,
                 crcdatvct as Vencimento,
@@ -58,23 +59,27 @@ class ListaTratativa extends Model
                 crcfil = 1 and
                 upper(crcbxd) = 'N' AND
                 crcvlr > '0.00' AND
-                crcprepago = false ";
+                crcprepago = false
+                AND NOT EXISTS (
+                SELECT 1 FROM public.crc_tratativas_movimentacao mov 
+			    WHERE mov.crc_tratativas_crcid = crc.crcid) ";
 
 
 
         $filtros = [];
         $params = [];
 
-
-        // Cenário B: Filtro por Mês/Ano (Caso não tenha o período completo)
+        // Cenário A: Filtro por Mês/Ano (Caso não tenha o período completo)
         if (!empty($mes)) {
             $dados_mes = explode('/', $mes);
-            if (count($dados_mes) == 2) {
+            if (count($dados_mes) == 3) {
 
+                $filtros[] = " EXTRACT(DAY FROM crc.crcdatvct) < :dia";
                 $filtros[] = " EXTRACT(MONTH FROM crc.crcdatvct) = :mes";
                 $filtros[] = " EXTRACT(YEAR FROM crc.crcdatvct) = :ano";
-                $params[':mes'] = (int)$dados_mes[0];
-                $params[':ano'] = (int)$dados_mes[1];
+                $params[':dia'] = (int)$dados_mes[0];
+                $params[':mes'] = (int)$dados_mes[1];
+                $params[':ano'] = (int)$dados_mes[2];
             }
         }
         // Se houver filtros, aplica-os à consulta
@@ -83,7 +88,7 @@ class ListaTratativa extends Model
         }
 
         $sql .= "  group by crcid ,clicobtel,clicomctt,clissp,clinomraz,cliid,venean,perfilcobtipo,crcprepago
-                ORDER BY vencimento asc;";
+                ORDER BY vencimento desc;";
 
         try {
             $sql = $this->db->prepare($sql);
@@ -100,7 +105,7 @@ class ListaTratativa extends Model
 
             return $result;
         } catch (PDOException $e) {
-            // $errorHandler = new AppManipularError('error');
+
             $this->manipulador->manipuladorDeErros(10, 'Erro na busca do getRelatorio_origim: ' . $e->getMessage(), __FILE__, __LINE__);
             echo "ERRO: " . $e->getMessage();
         }
@@ -249,7 +254,7 @@ class ListaTratativa extends Model
         }
     }
 
-    public function insert_notification($corpo, $tipo_acoes, $ctr_interno, $idCobranca, $p_contato)
+    public function insert_notification($info_sistema = null, $tipo_acoes, $ctr_interno, $idCobranca, $p_contato)
     {
 
 
@@ -265,7 +270,9 @@ class ListaTratativa extends Model
 
             $crc_tratativa_tipo_id = $tipo_acoes;
             $crc_tipo_acoes_id = $tipo_acoes;
-            $descricao_movimentacao =  $this->funciton->convertToLatin1('ENVIADO NOTIFICAÇÃO VIA EMAIL');
+            $descricao_movimentacao =  isset($info_sistema) && !empty($info_sistema) ? $this->funciton->convertToLatin1('AGUARDANDO O INÍCIO') : $this->funciton->convertToLatin1('ENVIADO NOTIFICAÇÃO VIA EMAIL');
+
+
 
 
             $cliIds = self::getRelatorioCobranca($idCobranca);
@@ -274,17 +281,16 @@ class ListaTratativa extends Model
 
             $new_tipo = self::listTipoContrato($crc_tratativa_tipo_id);
             $new_acoes = self::listTipoAcoes($crc_tipo_acoes_id);
-            $res = self::info_responsavel($ctr_interno);
+            $res =  isset($info_sistema) && !empty($info_sistema) ? $info_sistema : self::info_responsavel($ctr_interno);
 
 
-            $ocorrencia = "INSERIDO SISTEMA - RESPONSAVEL: " . $res['nome'] . " - EMAIL: " . $res['email'] . " - COBRANÇA: " . $cliIds[0]['n_nro'] . " - TIPO: " . $this->funciton->convertEncode($new_tipo[0]['tipo_tratativa']) . " - AÇÃO: " . $this->funciton->convertEncode($new_acoes[0]['acao_descricao']) . " - DESCRIÇÃO: " . $descricao_movimentacao;
-            $nome = "INSERIDO SISTEMA - ENVIO DE E-MAIL:";
-            print_R($this->funciton->convertToLatin1($ocorrencia));
-            print_R($this->funciton->convertToLatin1($descricao_movimentacao));
+            $ocorrencia = isset($info_sistema) && !empty($info_sistema) ? "INSERIDO SISTEMA - FATURA VENCIDA: - COBRANÇA nº: " . $cliIds[0]['n_nro'] . " - TIPO: " . $this->funciton->convertEncode($new_tipo[0]['tipo_tratativa']) . " - AÇÃO: " . $this->funciton->convertEncode($new_acoes[0]['acao_descricao']) . " - DESCRIÇÃO: AGUARDANDO O INÍCIO" : "INSERIDO SISTEMA - RESPONSAVEL: " . $res['nome'] . " - EMAIL: " . $res['email'] . " - COBRANÇA: " . $cliIds[0]['n_nro'] . " - TIPO: " . $this->funciton->convertEncode($new_tipo[0]['tipo_tratativa']) . " - AÇÃO: " . $this->funciton->convertEncode($new_acoes[0]['acao_descricao']) . " - DESCRIÇÃO: " . $descricao_movimentacao;
+
+
+
+            $nome =   isset($info_sistema) && !empty($info_sistema) ? $this->funciton->convertToLatin1('INSERIDO SISTEMA - FATURA VENCIDA') : "INSERIDO SISTEMA - ENVIO DE E-MAIL:";
             $ocorrencia = $this->funciton->convertToLatin1($ocorrencia);
 
-
-            // die();
 
             $stmt = $this->db->prepare($sql);
             $stmt->bindParam(':cobranca', $idCobranca);

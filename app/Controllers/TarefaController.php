@@ -38,29 +38,23 @@ class TarefaController
 
     public function processar_dados(): void
     {
-        echo "<pre>";
+        $data = date('d-m-Y', strtotime(Auxiliares::getDataAtual()));
+        $retorno = $this->modelos->getRelatorio_origim_list($data);
+        try {
+            if (!empty($retorno)) {
 
-        print_r('ESTOU SAINDO AQUI');
+                foreach ($retorno as $result) {
 
-        $cobranca = NULL;
-        $mes = '06-2026';
-        $data_inicio = NULL;
-        $data_fim = NULL;
-        $retorno = $this->modelos->getRelatorio_origim_list($mes);
-
-        echo "<pre>";
-
-        print_R($retorno);
-
-        die();
-        if (!empty($retorno)) {
-
-            foreach ($retorno as $result) {
-
-                if (!empty($result['n_nro'])) {
-                    $this->utilitarios->verifry_cobraca($result['n_nro']);
+                    if (!empty($result['n_nro'])) {
+                        $this->modelos->insert_notification(true, Auxiliares::TIPO_FATURA_VENCIDA, Auxiliares::TIPO_RESPONSAVEL, $result['n_nro'], Auxiliares::TIPO_P_CONTATO);
+                    }
                 }
+            } else {
+                $this->manipuladorInfo->manipuladorDeErros(1, 'Nenhuma Fatura encontrada para o dia ' . $data, __FILE__, __LINE__);
             }
+        } catch (Exception $e) {
+
+            $this->manipuladorInfo->manipuladorDeErros(5, 'Erro ao processar dados para o dia ' . $data . ' com a MSG: ' . $e->getMessage(), __FILE__, __LINE__);
         }
     }
 
@@ -86,6 +80,7 @@ class TarefaController
 
                 foreach ($retorno as $key => $value) {
 
+                    ///SE FOR A DATA IGUAL A DATA ATUAL, ENVIAR NOTIFICAÇÃO
                     if ($value['p_contato'] < $data_atual) {
                         $notificacao = true;
 
@@ -112,14 +107,16 @@ class TarefaController
                     // $destinatario = $_ENV['SMTP_DESTINATION'];
                     $assunto = $_ENV['SMTP_SUBJECT'];
                     $corpo = implode("<br>", $msg);
+
+                    ec
+                    die();
                     $retorno_envio_email = $this->email->enviar_email($destinatario, $assunto, $corpo, $altBody = null);
 
                     if ($retorno_envio_email) {
 
                         $tipo_acoes =  Auxiliares::TIPO_NOTIFICACAO;
-                        echo "<pre>";
-                        print_R($tipo_acoes);
-                        //   $this->modelos->insert_notification($corpo, $tipo_acoes, $ctr_interno, $idCobrancas, $p_contato[0]);
+
+                        $this->modelos->insert_notification(Auxiliares::TIPO_P_CONTATO, $tipo_acoes, $ctr_interno, $idCobrancas, $p_contato[0]);
                     } else {
 
                         $this->manipulador->manipuladorDeErros(20, 'Erro ao enviar e-mail para o destinatário: ' . $destinatario, __FILE__, __LINE__);
