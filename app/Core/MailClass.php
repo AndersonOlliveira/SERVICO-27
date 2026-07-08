@@ -36,8 +36,10 @@ class MailClass
             $mail->SMTPAuth   = true;                                   //Enable SMTP authentication
             $mail->Username   = $_ENV['SMTP_USER'];                     //SMTP username
             $mail->Password   = $_ENV['SMTP_PASSWORD'];                 //SMTP password
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;        //Enable implicit TLS encryption
-            $mail->Port       = $_ENV['SMTP_PORT'];                     //TCP port to connect to
+            $mail->SMTPSecure = 465;        //Enable implicit TLS encryption
+            // $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;        //Enable implicit TLS encryption
+            $mail->Port       = 587;                     //TCP port to connect to
+            // $mail->Port       = $_ENV['SMTP_PORT'];                     //TCP port to connect to
 
             //Recipients
             $mail->setFrom($_ENV['SMTP_USER'], 'Mailer');
@@ -52,6 +54,9 @@ class MailClass
             $mail->Body    = $corpo;
             $mail->AltBody = $altBody ? $altBody : strip_tags($corpo);
             $mail->CharSet = 'UTF-8';
+
+
+
             $mail->send();
             return true;
         } catch (Exception $e) {

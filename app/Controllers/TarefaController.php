@@ -60,6 +60,99 @@ class TarefaController
 
     public function processar_dados_email()
     {
+        $data_atual = Auxiliares::getDataAtual();
+        $retorno = $this->modelos->lista_notification();
+
+        try {
+            if (isset($retorno) && !isset($retorno['msg'])) {
+
+                $notificacoesPorDestinatario = [];
+
+                foreach ($retorno as $value) {
+                    // Verifica se a data de contato é igual  à data atual
+                    if ($value['p_contato'] == $data_atual) {
+                        $dataFormatada = date('d/m/Y', strtotime($value['vencimento']));
+                        $mensagem = "Lembrete de contato: entrar em contato com o cliente <strong>{$value['cliente']}</strong> referente à Fatura nº <strong>{$value['n_nro']}</strong> com a data de vencimento {$dataFormatada}\n";
+
+                        $email = 'anderson@proscore.com.br';
+                        // $email = $value['res']['email'];
+
+                        // Agrupa mensagens por destinatário
+                        if (!isset($notificacoesPorDestinatario[$email])) {
+                            $notificacoesPorDestinatario[$email] = [
+                                'mensagens' => [],
+                                'contratos' => [],
+                                'cobrancas' => [],
+                                'p_contato' => []
+                            ];
+                        }
+
+                        $notificacoesPorDestinatario[$email]['mensagens'][] = $mensagem;
+                        $notificacoesPorDestinatario[$email]['contratos'][] = $value['contratoresponsavel'];
+                        $notificacoesPorDestinatario[$email]['cobrancas'][] = $value['n_nro'];
+                        $notificacoesPorDestinatario[$email]['p_contato'][] = $value['p_contato'];
+                    } else {
+                        $this->manipuladorInfo->manipuladorDeErros(
+                            1,
+                            'Nenhuma Notificação encontrada para envio de e-mail. dados: Fatura nº ' . $value['n_nro'] . ' - data configurada: ' . $value['p_contato'],
+                            __FILE__,
+                            __LINE__
+                        );
+                    }
+                }
+
+                foreach ($notificacoesPorDestinatario as $destinatario => $dados) {
+                    $assunto = $_ENV['SMTP_SUBJECT'];
+                    $corpo = implode("<br>", $dados['mensagens']);
+
+                    $retorno_envio_email = $this->email->enviar_email($destinatario, $assunto, $corpo);
+
+                    if ($retorno_envio_email) {
+                        $tipo_acoes = Auxiliares::TIPO_NOTIFICACAO;
+
+                        // cobranças do destinatário
+                        foreach ($dados['cobrancas'] as $index => $idCobranca) {
+                            $ctr_interno = $dados['contratos'][$index];
+                            $p_contato = $dados['p_contato'][$index];
+
+                            $this->modelos->insert_notification(
+                                Auxiliares::TIPO_P_CONTATO,
+                                $tipo_acoes,
+                                $ctr_interno,
+                                $idCobranca,
+                                $p_contato
+                            );
+                        }
+                    } else {
+                        $this->manipulador->manipuladorDeErros(
+                            20,
+                            'Erro ao enviar e-mail para o destinatário: ' . $destinatario,
+                            __FILE__,
+                            __LINE__
+                        );
+                    }
+                }
+            } else {
+                $this->manipuladorInfo->manipuladorDeErros(
+                    1,
+                    'Nenhuma Notificação encontrada para envio de e-mail.' . $retorno['msg'],
+                    __FILE__,
+                    __LINE__
+                );
+            }
+        } catch (Exception $e) {
+            $this->manipulador->manipuladorDeErros(
+                20,
+                'Erro ao processar dados para envio de e-mail: ' . $e->getMessage(),
+                __FILE__,
+                __LINE__
+            );
+        }
+    }
+
+
+    public function processar_dados_email_old()
+    {
 
         $msg = [];
         $destino = [];
@@ -77,15 +170,24 @@ class TarefaController
 
             if (isset($retorno) && !isset($retorno['msg'])) {
 
-
+                $notificacoesPorDestinatario = [];
                 foreach ($retorno as $key => $value) {
 
                     ///SE FOR A DATA IGUAL A DATA ATUAL, ENVIAR NOTIFICAÇÃO
-                    if ($value['p_contato'] < $data_atual) {
+                    if ($value['p_contato'] <= $data_atual) {
                         $notificacao = true;
 
-                        $msg[] = 'Foi marcado para que entrar em contato com o cliente ' . $value['cliente'] . ' referente á Fatura nº ' . $value['n_nro'] . ' com a data de vencimento ' . $value['vencimento'];
+                        $destino[] = $value['res']['email'];
+                        $email = $value['res']['email'];
 
+                        $dataFormatada = date('d/m/Y', strtotime($value['vencimento']));
+
+                        // $msg[] = "Lembrete de contato: entrar em contato com o cliente <strong>{$value['cliente']}</strong> referente à Fatura nº  <strong>{$value['n_nro']}</strong> com a data de vencimento {$dataFormatada}\n";
+                        $msg = "Lembrete de contato: entrar em contato com o cliente <strong>{$value['cliente']}</strong> referente à Fatura nº  <strong>{$value['n_nro']}</strong> com a data de vencimento {$dataFormatada}\n";
+                        if (!isset($notificacoesPorDestinatario[$email])) {
+                            $notificacoesPorDestinatario[$email] = [];
+                        }
+                        $notificacoesPorDestinatario[$email][] = $msg;
                         $destino[] = $value['res']['email'];
                         $crtId[] = $value['contratoresponsavel'];
                         $idCobranca[] = $value['n_nro'];
@@ -97,19 +199,25 @@ class TarefaController
                     }
                 }
 
+                // foreach ($notificacoesPorDestinatario as $destinatario => $mensagens) {
+                //     $assunto = $_ENV['SMTP_SUBJECT'];
+                //     $corpo = implode("<br>", $mensagens);
+
+                //     // Aqui você chama sua função de envio de e-mail
+                //     $this->enviarEmail($destinatario, $assunto, $corpo);
+                // }
+
 
                 if ($notificacao) {
 
                     //ENVIAR O EMAIL 
-                    $destinatario =  $destino[0];
+                    // $destinatario =  $destino[0];
                     $ctr_interno =  $crtId[0];
                     $idCobrancas = $idCobranca[0];
-                    // $destinatario = $_ENV['SMTP_DESTINATION'];
+                    $destinatario = $_ENV['SMTP_DESTINATION'];
                     $assunto = $_ENV['SMTP_SUBJECT'];
                     $corpo = implode("<br>", $msg);
 
-                    ec
-                    die();
                     $retorno_envio_email = $this->email->enviar_email($destinatario, $assunto, $corpo, $altBody = null);
 
                     if ($retorno_envio_email) {
