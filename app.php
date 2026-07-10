@@ -13,7 +13,6 @@ $dotenv->load();
 // Instancia o controlador e inicia o loop do terminal
 $controller = new TarefaController();
 
-// echo "estou chamando o arquivo";
 
 $controller->processar_dados();
 
