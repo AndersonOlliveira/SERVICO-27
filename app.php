@@ -16,4 +16,4 @@ $controller = new TarefaController();
 
 $controller->processar_dados();
 
-$controller->processar_dados_email();
+// $controller->processar_dados_email();

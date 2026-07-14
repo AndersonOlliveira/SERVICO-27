@@ -70,9 +70,9 @@ class TarefaController
 
                 foreach ($retorno as $value) {
                     // Verifica se a data de contato é igual  à data atual
-                    if ($value['p_contato'] == $data_atual) {
+                    if ($value['p_contato'] <= $data_atual) {
                         $dataFormatada = date('d/m/Y', strtotime($value['vencimento']));
-                        $mensagem = "Lembrete de contato: entrar em contato com o cliente <strong>{$value['cliente']}</strong> referente à Fatura nº <strong>{$value['n_nro']}</strong> com a data de vencimento {$dataFormatada}\n";
+                        $mensagem = "Contatar o cliente <strong>{$value['cliente']}</strong> referente à Fatura nº <strong>{$value['doc_ger']}</strong>, com a data do vencimento {$dataFormatada}\n";
 
                         $email = 'anderson@proscore.com.br';
                         // $email = $value['res']['email'];
@@ -94,7 +94,7 @@ class TarefaController
                     } else {
                         $this->manipuladorInfo->manipuladorDeErros(
                             1,
-                            'Nenhuma Notificação encontrada para envio de e-mail. dados: Fatura nº ' . $value['n_nro'] . ' - data configurada: ' . $value['p_contato'],
+                            'Nenhuma Notificação encontrada para envio de e-mail. dados: Fatura nº ' . $value['doc_ger'] . ' - data configurada: ' . $value['p_contato'],
                             __FILE__,
                             __LINE__
                         );

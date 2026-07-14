@@ -74,10 +74,10 @@ class ListaTratativa extends Model
             $dados_mes = explode('/', $mes);
             if (count($dados_mes) == 3) {
 
-                $filtros[] = " EXTRACT(DAY FROM crc.crcdatvct) < :dia";
+                // $filtros[] = " EXTRACT(DAY FROM crc.crcdatvct) < :dia";
                 $filtros[] = " EXTRACT(MONTH FROM crc.crcdatvct) = :mes";
                 $filtros[] = " EXTRACT(YEAR FROM crc.crcdatvct) = :ano";
-                $params[':dia'] = (int)$dados_mes[0];
+                // $params[':dia'] = (int)$dados_mes[0];
                 $params[':mes'] = (int)$dados_mes[1];
                 $params[':ano'] = (int)$dados_mes[2];
             }
