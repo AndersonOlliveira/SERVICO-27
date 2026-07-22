@@ -71,7 +71,7 @@ class ListaTratativa extends Model
 
         // Cenário A: Filtro por Mês/Ano (Caso não tenha o período completo)
         if (!empty($mes)) {
-            $dados_mes = explode('/', $mes);
+            $dados_mes = explode('-', $mes);
             if (count($dados_mes) == 3) {
 
                 // $filtros[] = " EXTRACT(DAY FROM crc.crcdatvct) < :dia";
